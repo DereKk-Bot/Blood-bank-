@@ -1,0 +1,70 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isSignedIn() { return request.auth != null; }
+    function getUserData() { return get(/databases/$(database)/documents/users/$(request.auth.uid)).data; }
+    function isAdmin() { return isSignedIn() && getUserData().role == 'ADMIN'; }
+    function isHospital() { return isSignedIn() && getUserData().role == 'HOSPITAL'; }
+    function isDonor() { return isSignedIn() && getUserData().role == 'DONOR'; }
+
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow create: if isSignedIn() && request.auth.uid == userId;
+      allow update: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+      allow delete: if isAdmin();
+    }
+    match /hospitals/{hospitalId} {
+      allow read: if true;
+      allow create: if true;
+      allow update: if isSignedIn() && (resource.data.hospitalId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+    match /donors/{donorId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && (donorId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+    match /recipients/{recipientId} {
+      allow read: if isSignedIn();
+      allow create, update: if isSignedIn() && (recipientId == request.auth.uid || isAdmin());
+      allow delete: if isAdmin();
+    }
+    match /bloodInventory/{inventoryId} {
+      allow read: if true;
+      allow create, update, delete: if isHospital() || isAdmin();
+    }
+    match /bloodRequests/{requestId} {
+      allow read, create, update: if isSignedIn();
+    }
+    match /emergencyRequests/{emergencyRequestId} {
+      allow read, create: if isSignedIn();
+      allow update, delete: if isAdmin();
+    }
+    match /donorEmergencyRequests/{requestId} {
+      allow read: if isSignedIn();
+      allow create: if isAdmin();
+      allow update: if isSignedIn();
+    }
+    match /appointments/{appointmentId} {
+      allow read, create, update: if isSignedIn();
+    }
+    match /donations/{donationId} {
+      allow read: if isSignedIn();
+      allow create, update: if isHospital() || isAdmin();
+    }
+    match /notifications/{notificationId} {
+      allow read, update: if isSignedIn() && resource.data.userId == request.auth.uid;
+      allow create: if isSignedIn();
+    }
+    match /hospitalInvitations/{invitationId} {
+      allow read: if true;
+      allow create: if isAdmin();
+      allow update: if isAdmin() || (isSignedIn() && request.auth.token.email == resource.data.email && resource.data.status == 'Pending');
+      allow delete: if isAdmin();
+    }
+    match /settings/{settingId} {
+      allow read: if true;
+      allow write: if isAdmin();
+    }
+  }
+}
